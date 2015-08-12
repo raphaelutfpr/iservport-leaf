@@ -1,8 +1,24 @@
 (function() {
-	app = angular.module('security', ['ui.bootstrap', 'app.layout', 'angular-loading-bar', 'app.services']);
-	
-	app.controller('LoginController', ['$scope', '$window', '$http', '$resource' , 'genericServices', 'securityServices'
-	                                  , function($scope, $window, $http, $resource, genericServices, securityServices) {
+	app = angular.module('security', ['ui.bootstrap', 'app.layout', 'angular-loading-bar', 'app.services'])
+	/**
+	 * Resources service.
+	 */
+	.factory('resources', ['$resource', function($resource) {
+		var service = {};
+		service.login = $resource("/login/",{ username:"@username", password: "@password", rememberme:"@rememberme"},{
+			login : { method:'POST',  headers : {'Content-Type': 'application/x-www-form-urlencoded'}}
+		});
+		service.signup = $resource("/signup/" , {principal:"@principal", tempEmail:"@tempEmail"});
+		service.recovery = $resource("/recovery/", { email:"@email"}, {
+			update: { method: 'PUT' }, create: { method: 'POST' }
+		});
+		return service;
+	}]) 
+	/**
+	 * Angular security controller
+	 */
+	.controller('SecurityController', ['$scope', '$window', 'resources' , 'genericServices', 'securityServices'
+	                                  , function($scope, $window, resources, genericServices, securityServices) {
 	
 		$scope.baseName = "home";
 		$scope.menuName = "home";
@@ -20,25 +36,18 @@
 		}
 		
 		$scope.cannotChangePassword = true;
+		
 		$scope.$watch('[password,cpassword]', function () { 
 			$scope.cannotChangePassword = !genericServices.verifyPassword($scope.password, $scope.cpassword);
 		}, true);
+		
 		$scope.isAuthorized =function(role, ext){
 			return securityServices.isAuthorized($scope.authList, role, ext);
 		}
-		$scope.loginResource = $resource("/login/",{ username:"@username", password: "@password", rememberme:"@rememberme"},{
-			login : { method:'POST',  headers : {'Content-Type': 'application/x-www-form-urlencoded'}}
-		});
-		$scope.signUpResource = $resource("/signup/" , {principal:"@principal", tempEmail:"@tempEmail"});
-		$scope.passwordResource = $resource("/signup/createPass");
-		$scope.passwordRecoveryResource = $resource("/recovery/", { email:"@email"}, {
-			update: { method: 'PUT' },
-			create: { method: 'POST' }
-		});
 		
 		$scope.login = function(usernameVal,passwordVal){
 //			$scope.formLogin = {"username" :usernameVal, "password" :passwordVal };
-			$scope.logged = $scope.loginResource.login($.param({username :usernameVal, password :passwordVal })); 
+			$scope.logged = resources.login.login($.param({username :usernameVal, password :passwordVal })); 
 			$scope.logged.$promise.then(
 					function(data, getReponseHeaders) {
 						$window.location.href = "/";
@@ -47,12 +56,12 @@
 		}
 		
 		$scope.saveEmail = function(emailVal){
-			$scope.signUpResource.get({tempEmail:emailVal});
+			resources.signup.get({tempEmail:emailVal});
 		}
 		
 		//form initializer
 		$scope.create = function(){
-			$scope.form =  $scope.signUpResource.get({create:true});
+			$scope.form =  resources.signup.get({create:true});
 			$scope.form.$promise.then(function(data) {
 				data.email = $scope.email;
 				$scope.form = data;
@@ -61,7 +70,7 @@
 		$scope.create();
 		$scope.signUp = function(){
 			$scope.form.password = 'save';
-			$scope.returnCode = $scope.signUpResource.save($scope.form);
+			$scope.returnCode = resources.signup.save($scope.form);
 			$scope.returnCode.$promise.then(function(data) {
 				console.log(data);
 			});
@@ -69,16 +78,16 @@
 	
 		$scope.updateUser = function(){
 			$scope.form.email = $scope.email;
-			$scope.passwordResource.save($scope.form);
+			resources.signup.save($scope.form);
 		};
 		
 		$scope.passwordEmail = function(val){
-			$scope.passwordRecoveryResource.save({email:val});
+			resources.password.save({email:val});
 		}
 		
 		$scope.updatePassword = function(){
 			$scope.form.email = $scope.email;
-			$scope.passwordRecoveryResource.update($scope.form);
+			resources.recovery.update($scope.form);
 		}
 		
 		$scope.passwordMatches = function(){
